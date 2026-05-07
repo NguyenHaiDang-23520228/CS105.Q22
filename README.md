@@ -11,14 +11,14 @@
 - **Course Title:** Computer Graphics
 - **Course Code:** CS105
 - **Class Code:** CS105.Q22
-- **Academic Year:** Semester 2 (2025–2026)
-- **Instructor:** [Điền tên Thầy tại đây]
+- **Academic Year:** Semester 3 (2026–2027)
+- **Instructor:** Cáp Phạm Đình Thăng
 
 ## Team Members
 
-- [Nguyễn Hải Đăng - 23520228](https://github.com/Youngboyvungtau) - Shader Specialist & Core Engine
-- [Tên Thành Viên 2 - MSSV](Link_GitHub) - Camera Navigation & Affine Logic
-- [Tên Thành Viên 3 - MSSV](Link_GitHub) - Assets, UI & Documentation
+- [Nguyễn Hải Đăng - 23520228] 
+- [Nguyễn Bi Anh - 23520055]
+- [Trần Hoài Minh - 23520955] 
 
 ## Solar System & Space Travel Simulation
 
