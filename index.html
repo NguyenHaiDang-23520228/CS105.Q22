@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpaceTravel_CS105</title>
+    <style>
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        color: #e0f7ff;
+      }
+
+      /* --- HUD góc trái trên --- */
+      #hud {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        padding: 10px 14px;
+        background: rgba(0, 20, 40, 0.8);
+        border: 1px solid rgba(0, 200, 255, 0.3);
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.6;
+        pointer-events: none;
+        user-select: none;
+        z-index: 10;
+        max-width: 340px;
+      }
+
+      #hud kbd {
+        display: inline-block;
+        padding: 0 5px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        font-family: inherit;
+        font-size: 11px;
+      }
+
+      #hud .section-title {
+        color: #66ccff;
+        font-weight: bold;
+        margin-top: 6px;
+      }
+
+      #selection-info {
+        color: #ffcc44;
+        font-style: italic;
+      }
+
+      /* --- Panel điều khiển góc phải --- */
+      #control-panel {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 10;
+        width: 200px;
+      }
+
+      .panel-group {
+        background: rgba(0, 20, 40, 0.85);
+        border: 1px solid rgba(0, 200, 255, 0.25);
+        border-radius: 6px;
+        padding: 8px 10px;
+      }
+
+      .panel-group h4 {
+        margin: 0 0 6px 0;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #66ccff;
+      }
+
+      /* --- Mode buttons --- */
+      .mode-btn {
+        display: block;
+        width: 100%;
+        margin-bottom: 4px;
+        padding: 5px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #c0ddf0;
+        cursor: pointer;
+        font-size: 12px;
+        text-align: left;
+        transition: all 0.15s;
+      }
+
+      .mode-btn:hover {
+        background: rgba(100, 200, 255, 0.15);
+      }
+
+      .mode-btn.active {
+        background: rgba(50, 140, 255, 0.35);
+        border-color: #4499ff;
+        color: #ffffff;
+      }
+
+      /* --- Light toggles --- */
+      .light-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .light-toggle input[type="checkbox"] {
+        accent-color: #4499ff;
+        cursor: pointer;
+      }
+
+      /* --- Upload texture --- */
+      .upload-area {
+        font-size: 11px;
+      }
+
+      .upload-area label {
+        display: block;
+        margin-bottom: 4px;
+        color: #aaccdd;
+      }
+
+      .upload-area input[type="file"] {
+        width: 100%;
+        font-size: 11px;
+        color: #c0ddf0;
+      }
+
+      .upload-area input[type="file"]::file-selector-button {
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
+        color: #c0ddf0;
+        cursor: pointer;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- HUD hướng dẫn điều khiển -->
+    <div id="hud">
+      <strong>SpaceTravel — CS105</strong><br />
+
+      <span class="section-title">Di chuyển</span><br />
+      <kbd>WASD</kbd> Di chuyển &nbsp;
+      <kbd>Chuột</kbd> Nhìn &nbsp;
+      <kbd>[</kbd><kbd>]</kbd> Near/Far<br />
+      <span id="clip-info">Near: 0.1 | Far: 1000</span><br />
+
+      <span class="section-title">Teleport</span><br />
+      <kbd>1</kbd>–<kbd>9</kbd> Bay đến hành tinh<br />
+
+      <span class="section-title">Chọn vật thể</span><br />
+      <kbd>ESC</kbd> thoát Pointer Lock → click vật thể<br />
+      <kbd>↑↓←→</kbd> Biến đổi Affine &nbsp;
+      <kbd>ESC</kbd> Bỏ chọn<br />
+      <span id="selection-info">Chưa chọn vật thể</span>
+    </div>
+
+    <!-- Panel điều khiển bên phải -->
+    <div id="control-panel">
+      <!-- Mode Affine -->
+      <div class="panel-group">
+        <h4>Mode biến đổi</h4>
+        <button class="mode-btn active" id="btn-mode-translate"
+          onclick="window.__interactionSetMode(0)">
+          Tịnh tiến (Translation)
+        </button>
+        <button class="mode-btn" id="btn-mode-rotate"
+          onclick="window.__interactionSetMode(1)">
+          Quay (Rotation)
+        </button>
+        <button class="mode-btn" id="btn-mode-scale"
+          onclick="window.__interactionSetMode(2)">
+          Tỉ lệ (Scaling)
+        </button>
+      </div>
+
+      <!-- Toggle ánh sáng -->
+      <div class="panel-group">
+        <h4>Ánh sáng</h4>
+        <label class="light-toggle">
+          <input type="checkbox" id="toggle-ambient" checked />
+          Ambient Light
+        </label>
+        <label class="light-toggle">
+          <input type="checkbox" id="toggle-point" checked />
+          Point Light
+        </label>
+        <label class="light-toggle">
+          <input type="checkbox" id="toggle-directional" checked />
+          Directional Light
+        </label>
+      </div>
+
+      <!-- Upload Texture -->
+      <div class="panel-group upload-area">
+        <h4>Upload Texture</h4>
+        <label>Chọn vật thể trước, rồi chọn ảnh:</label>
+        <input type="file" id="uploadTexture" accept="image/*" />
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
