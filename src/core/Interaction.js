@@ -1,54 +1,43 @@
 import * as THREE from 'three';
 
 /**
- * Module tương tác: Raycaster + 3 chế độ biến đổi Affine thủ công.
+ * Raycaster + 3 chế độ biến đổ Affine thủ công.
  *
- * Raycaster chiếu tia từ vị trí chuột qua ma trận chiếu ngược (Inverse Projection)
- * để xác định vật thể bị click trong không gian 3D.
+ * Click chuột (không drag) → Raycaster chọn vật thể.
+ * Phím mũi tên → biến đổi vật thể theo mode đang chọn.
  *
- * 3 mode Affine:
- *   - Tịnh tiến (Translation): dịch position theo phím mũi tên
- *   - Quay (Rotation): xoay quanh trục Y/X theo phím mũi tên
- *   - Tỉ lệ (Scaling): phóng to/thu nhỏ theo phím mũi tên
+ * Tương thích Orbit Camera (không cần pointer lock).
  */
 
 const MODES = ['translate', 'rotate', 'scale'];
-const MODE_LABELS = {
-  translate: 'Tịnh tiến',
-  rotate: 'Quay',
-  scale: 'Tỉ lệ',
-};
 
-export function setupInteraction(camera, scene, renderer, controls) {
+export function setupInteraction(camera, scene, renderer, cameraControls) {
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
   let selectedObject = null;
   let previousEmissive = null;
-  let currentMode = 0; // index trong MODES
+  let currentMode = 0;
 
-  // Tốc độ biến đổi Affine theo mode
   const TRANSLATE_SPEED = 0.5;
   const ROTATE_SPEED = 0.05;
   const SCALE_SPEED = 0.05;
 
-  // Hàm lọc: chỉ pick các Mesh có tên hoặc có geometry (bỏ qua grid, floor, orbit lines)
   function getPickableObjects() {
     const pickable = [];
     scene.traverse((obj) => {
-      if (obj.isMesh && obj.name && obj.name !== '' && obj.geometry) {
+      if (obj.isMesh && obj.name && !obj.name.startsWith('__') && obj.geometry) {
         pickable.push(obj);
       }
     });
     return pickable;
   }
 
-  // Click chuột → Raycaster chọn vật thể
-  renderer.domElement.addEventListener('click', (event) => {
-    // Chỉ xử lý khi KHÔNG ở Pointer Lock (khi ESC đã thoát lock)
-    if (document.pointerLockElement === renderer.domElement) return;
+  // Click = mouseup sau khi không drag
+  renderer.domElement.addEventListener('mouseup', (event) => {
+    if (event.button !== 0) return;
+    if (!cameraControls.wasClick()) return;
 
-    // Chuyển tọa độ pixel sang NDC (Normalized Device Coordinates) [-1, 1]
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
@@ -63,33 +52,23 @@ export function setupInteraction(camera, scene, renderer, controls) {
   });
 
   function selectObject(obj) {
-    // Bỏ chọn cũ
-    if (selectedObject && selectedObject !== obj) {
-      restoreEmissive(selectedObject);
-    }
+    if (selectedObject && selectedObject !== obj) restoreEmissive(selectedObject);
 
     selectedObject = obj;
 
-    // Đánh dấu bằng emissive color (viền sáng)
     if (selectedObject.material && selectedObject.material.emissive) {
       previousEmissive = selectedObject.material.emissive.getHex();
       selectedObject.material.emissive.setHex(0x335599);
       selectedObject.material.emissiveIntensity = 0.6;
     }
 
-    // Vô hiệu hóa WASD camera khi đang thao tác vật thể
-    controls.disabled = true;
-
     updateSelectionHUD();
   }
 
   function deselectObject() {
-    if (selectedObject) {
-      restoreEmissive(selectedObject);
-    }
+    if (selectedObject) restoreEmissive(selectedObject);
     selectedObject = null;
     previousEmissive = null;
-    controls.disabled = false;
     updateSelectionHUD();
   }
 
@@ -100,24 +79,15 @@ export function setupInteraction(camera, scene, renderer, controls) {
     }
   }
 
-  // Chuyển mode khi bấm nút
   function setMode(index) {
     currentMode = index;
     updateModeButtons();
   }
 
-  function cycleMode() {
-    currentMode = (currentMode + 1) % MODES.length;
-    updateModeButtons();
-  }
-
-  // Cập nhật UI nút mode
   function updateModeButtons() {
     MODES.forEach((m, i) => {
       const btn = document.getElementById(`btn-mode-${m}`);
-      if (btn) {
-        btn.classList.toggle('active', i === currentMode);
-      }
+      if (btn) btn.classList.toggle('active', i === currentMode);
     });
   }
 
@@ -125,18 +95,14 @@ export function setupInteraction(camera, scene, renderer, controls) {
     const el = document.getElementById('selection-info');
     if (el) {
       el.textContent = selectedObject
-        ? `Đã chọn: ${selectedObject.name || 'Mesh'}`
-        : 'Chưa chọn vật thể (ESC → click để chọn)';
+        ? `Đã chọn: ${selectedObject.name}`
+        : 'Click vật thể để chọn';
     }
   }
 
-  // Phím mũi tên → biến đổi Affine lên vật thể đang chọn
   document.addEventListener('keydown', (event) => {
     if (!selectedObject) return;
 
-    const mode = MODES[currentMode];
-
-    // Phím ESC → bỏ chọn
     if (event.key === 'Escape') {
       deselectObject();
       return;
@@ -145,26 +111,21 @@ export function setupInteraction(camera, scene, renderer, controls) {
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
     event.preventDefault();
 
+    const mode = MODES[currentMode];
+
     if (mode === 'translate') {
-      // Ma trận Tịnh tiến T(dx, dy, dz): position += delta
       const d = TRANSLATE_SPEED;
       if (event.key === 'ArrowUp') selectedObject.position.z -= d;
       if (event.key === 'ArrowDown') selectedObject.position.z += d;
       if (event.key === 'ArrowLeft') selectedObject.position.x -= d;
       if (event.key === 'ArrowRight') selectedObject.position.x += d;
-    }
-
-    if (mode === 'rotate') {
-      // Ma trận Quay R(θ): rotation quanh trục Y hoặc X
+    } else if (mode === 'rotate') {
       const r = ROTATE_SPEED;
       if (event.key === 'ArrowUp') selectedObject.rotation.x -= r;
       if (event.key === 'ArrowDown') selectedObject.rotation.x += r;
       if (event.key === 'ArrowLeft') selectedObject.rotation.y -= r;
       if (event.key === 'ArrowRight') selectedObject.rotation.y += r;
-    }
-
-    if (mode === 'scale') {
-      // Ma trận Tỉ lệ S(sx, sy, sz): scale đồng nhất
+    } else if (mode === 'scale') {
       const s = SCALE_SPEED;
       if (event.key === 'ArrowUp') selectedObject.scale.multiplyScalar(1 + s);
       if (event.key === 'ArrowDown') selectedObject.scale.multiplyScalar(1 - s);
@@ -173,26 +134,14 @@ export function setupInteraction(camera, scene, renderer, controls) {
     }
   });
 
-  // Expose cho nút HTML
   window.__interactionSetMode = setMode;
-  window.__interactionCycleMode = cycleMode;
+  setTimeout(() => { updateModeButtons(); updateSelectionHUD(); }, 0);
 
-  // Khởi tạo UI ban đầu
-  setTimeout(() => {
-    updateModeButtons();
-    updateSelectionHUD();
-  }, 0);
-
-  return {
-    getSelected: () => selectedObject,
-    setMode,
-    deselectObject,
-  };
+  return { getSelected: () => selectedObject, setMode, deselectObject };
 }
 
 /**
- * Upload texture runtime: đọc file ảnh từ <input>, gán lên vật thể đang chọn.
- * Dùng FileReader → DataURL → TextureLoader → overwrite material.map
+ * Upload texture runtime: đọc ảnh → gán lên vật thể đang chọn.
  */
 export function setupTextureUpload(interactionCtx) {
   const input = document.getElementById('uploadTexture');
@@ -214,7 +163,6 @@ export function setupTextureUpload(interactionCtx) {
       const loader = new THREE.TextureLoader();
       loader.load(e.target.result, (texture) => {
         texture.colorSpace = THREE.SRGBColorSpace;
-        // Overwrite texture lên material của vật thể đang chọn
         if (selected.material) {
           if (selected.material.map) selected.material.map.dispose();
           selected.material.map = texture;

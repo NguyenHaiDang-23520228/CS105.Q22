@@ -3,193 +3,200 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SpaceTravel_CS105</title>
+    <title>SpaceTravel — CS105</title>
     <style>
-      * { box-sizing: border-box; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
 
       body {
-        margin: 0;
         overflow: hidden;
         background: #000;
         font-family: 'Segoe UI', Tahoma, sans-serif;
-        color: #e0f7ff;
+        color: #e0f2ff;
       }
 
-      /* --- HUD góc trái trên --- */
+      /* ── HUD góc trái ── */
       #hud {
         position: fixed;
-        top: 12px;
-        left: 12px;
-        padding: 10px 14px;
-        background: rgba(0, 20, 40, 0.8);
-        border: 1px solid rgba(0, 200, 255, 0.3);
-        border-radius: 6px;
+        top: 14px;
+        left: 14px;
+        max-width: 380px;
+        padding: 12px 14px;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        backdrop-filter: blur(8px);
         font-size: 12px;
-        line-height: 1.6;
+        line-height: 1.55;
         pointer-events: none;
         user-select: none;
         z-index: 10;
-        max-width: 340px;
+      }
+
+      #hud h1 {
+        font-size: 16px;
+        color: #ffdc7a;
+        margin-bottom: 8px;
       }
 
       #hud kbd {
         display: inline-block;
-        padding: 0 5px;
-        border-radius: 3px;
-        background: rgba(255, 255, 255, 0.1);
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.12);
         border: 1px solid rgba(255, 255, 255, 0.2);
         font-family: inherit;
         font-size: 11px;
       }
 
-      #hud .section-title {
+      .hud-section {
         color: #66ccff;
         font-weight: bold;
-        margin-top: 6px;
+        margin-top: 5px;
+        display: block;
       }
 
-      #selection-info {
-        color: #ffcc44;
-        font-style: italic;
+      #clip-info { color: #aaccdd; }
+      #selection-info { color: #ffcc44; font-style: italic; }
+
+      /* ── Info box góc phải trên ── */
+      #infoBox {
+        position: fixed;
+        right: 14px;
+        top: 14px;
+        min-width: 200px;
+        max-width: 300px;
+        padding: 10px 12px;
+        background: rgba(0, 0, 0, 0.50);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 10px;
+        font-size: 13px;
+        line-height: 1.45;
+        z-index: 10;
+        pointer-events: none;
       }
 
-      /* --- Panel điều khiển góc phải --- */
+      #infoBox b { color: #9ad9ff; }
+
+      /* ── Control panel góc phải dưới ── */
       #control-panel {
         position: fixed;
-        top: 12px;
-        right: 12px;
+        right: 14px;
+        bottom: 14px;
         display: flex;
         flex-direction: column;
         gap: 8px;
         z-index: 10;
-        width: 200px;
+        width: 195px;
       }
 
       .panel-group {
-        background: rgba(0, 20, 40, 0.85);
-        border: 1px solid rgba(0, 200, 255, 0.25);
-        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 10px;
         padding: 8px 10px;
+        backdrop-filter: blur(6px);
       }
 
       .panel-group h4 {
-        margin: 0 0 6px 0;
-        font-size: 11px;
+        margin: 0 0 5px;
+        font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         color: #66ccff;
       }
 
-      /* --- Mode buttons --- */
       .mode-btn {
         display: block;
         width: 100%;
-        margin-bottom: 4px;
-        padding: 5px 8px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        margin-bottom: 3px;
+        padding: 4px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
         border-radius: 4px;
-        background: rgba(255, 255, 255, 0.06);
-        color: #c0ddf0;
+        background: rgba(255, 255, 255, 0.05);
+        color: #bbd5e8;
         cursor: pointer;
-        font-size: 12px;
+        font-size: 11px;
         text-align: left;
         transition: all 0.15s;
       }
 
-      .mode-btn:hover {
-        background: rgba(100, 200, 255, 0.15);
-      }
-
+      .mode-btn:hover { background: rgba(100, 200, 255, 0.12); }
       .mode-btn.active {
-        background: rgba(50, 140, 255, 0.35);
+        background: rgba(50, 140, 255, 0.3);
         border-color: #4499ff;
-        color: #ffffff;
+        color: #fff;
       }
 
-      /* --- Light toggles --- */
       .light-toggle {
         display: flex;
         align-items: center;
-        gap: 6px;
-        margin-bottom: 4px;
-        font-size: 12px;
+        gap: 5px;
+        margin-bottom: 3px;
+        font-size: 11px;
         cursor: pointer;
       }
 
-      .light-toggle input[type="checkbox"] {
-        accent-color: #4499ff;
-        cursor: pointer;
-      }
+      .light-toggle input { accent-color: #4499ff; cursor: pointer; }
 
-      /* --- Upload texture --- */
-      .upload-area {
-        font-size: 11px;
-      }
-
-      .upload-area label {
-        display: block;
-        margin-bottom: 4px;
-        color: #aaccdd;
-      }
-
-      .upload-area input[type="file"] {
-        width: 100%;
-        font-size: 11px;
-        color: #c0ddf0;
-      }
-
+      .upload-area { font-size: 10px; }
+      .upload-area label { display: block; margin-bottom: 3px; color: #99aabb; }
+      .upload-area input[type="file"] { width: 100%; font-size: 10px; color: #bbd5e8; }
       .upload-area input[type="file"]::file-selector-button {
-        padding: 3px 8px;
+        padding: 2px 6px;
         border-radius: 4px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background: rgba(255, 255, 255, 0.08);
-        color: #c0ddf0;
+        border: 1px solid rgba(255,255,255,0.18);
+        background: rgba(255,255,255,0.06);
+        color: #bbd5e8;
         cursor: pointer;
-        font-size: 11px;
+        font-size: 10px;
       }
     </style>
   </head>
   <body>
-    <!-- HUD hướng dẫn điều khiển -->
+    <!-- HUD -->
     <div id="hud">
-      <strong>SpaceTravel — CS105</strong><br />
+      <h1>Đồ án: Mô phỏng hệ mặt trời 3D</h1>
+      <p><b>Three.js + Custom GLSL Shaders</b></p>
 
-      <span class="section-title">Di chuyển</span><br />
-      <kbd>WASD</kbd> Di chuyển &nbsp;
-      <kbd>Chuột</kbd> Nhìn &nbsp;
-      <kbd>[</kbd><kbd>]</kbd> Near/Far<br />
-      <span id="clip-info">Near: 0.1 | Far: 1000</span><br />
+      <span class="hud-section">Camera</span>
+      <kbd>Chuột trái</kbd> xoay &nbsp;
+      <kbd>Cuộn</kbd> zoom &nbsp;
+      <kbd>Chuột phải</kbd> pan<br />
+      <kbd>1</kbd>–<kbd>8</kbd> focus hành tinh &nbsp;
+      <kbd>0</kbd> toàn cảnh<br />
 
-      <span class="section-title">Teleport</span><br />
-      <kbd>1</kbd>–<kbd>9</kbd> Bay đến hành tinh<br />
+      <span class="hud-section">Điều khiển</span>
+      <kbd>Space</kbd> dừng/chạy &nbsp;
+      <kbd>O</kbd> quỹ đạo &nbsp;
+      <kbd>S</kbd> shadow<br />
+      <kbd>+</kbd>/<kbd>-</kbd> tốc độ &nbsp;
+      <kbd>[</kbd><kbd>]</kbd> near/far<br />
+      <span id="clip-info">Near: 0.1 | Far: 3000</span><br />
 
-      <span class="section-title">Chọn vật thể</span><br />
-      <kbd>ESC</kbd> thoát Pointer Lock → click vật thể<br />
-      <kbd>↑↓←→</kbd> Biến đổi Affine &nbsp;
-      <kbd>ESC</kbd> Bỏ chọn<br />
-      <span id="selection-info">Chưa chọn vật thể</span>
+      <span class="hud-section">Chọn vật thể (Affine)</span>
+      Click hành tinh → <kbd>↑↓←→</kbd> biến đổi &nbsp;
+      <kbd>ESC</kbd> bỏ chọn<br />
+      <span id="selection-info">Click vật thể để chọn</span>
     </div>
 
-    <!-- Panel điều khiển bên phải -->
+    <!-- Info box -->
+    <div id="infoBox">
+      <b>Đang xem:</b> Toàn cảnh<br />
+      <span style="font-size:11px;color:#aaa">Scene Graph, Custom Shader, Blinn-Phong, Shadow Map, Texture, Affine Transform</span>
+    </div>
+
+    <!-- Control panel -->
     <div id="control-panel">
-      <!-- Mode Affine -->
       <div class="panel-group">
-        <h4>Mode biến đổi</h4>
+        <h4>Mode biến đổi Affine</h4>
         <button class="mode-btn active" id="btn-mode-translate"
-          onclick="window.__interactionSetMode(0)">
-          Tịnh tiến (Translation)
-        </button>
+          onclick="window.__interactionSetMode(0)">Tịnh tiến (Translate)</button>
         <button class="mode-btn" id="btn-mode-rotate"
-          onclick="window.__interactionSetMode(1)">
-          Quay (Rotation)
-        </button>
+          onclick="window.__interactionSetMode(1)">Quay (Rotate)</button>
         <button class="mode-btn" id="btn-mode-scale"
-          onclick="window.__interactionSetMode(2)">
-          Tỉ lệ (Scaling)
-        </button>
+          onclick="window.__interactionSetMode(2)">Tỉ lệ (Scale)</button>
       </div>
 
-      <!-- Toggle ánh sáng -->
       <div class="panel-group">
         <h4>Ánh sáng</h4>
         <label class="light-toggle">
@@ -197,19 +204,14 @@
           Ambient Light
         </label>
         <label class="light-toggle">
-          <input type="checkbox" id="toggle-point" checked />
-          Point Light
-        </label>
-        <label class="light-toggle">
           <input type="checkbox" id="toggle-directional" checked />
           Directional Light
         </label>
       </div>
 
-      <!-- Upload Texture -->
       <div class="panel-group upload-area">
         <h4>Upload Texture</h4>
-        <label>Chọn vật thể trước, rồi chọn ảnh:</label>
+        <label>Chọn hành tinh → upload ảnh:</label>
         <input type="file" id="uploadTexture" accept="image/*" />
       </div>
     </div>

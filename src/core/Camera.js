@@ -1,132 +1,175 @@
 import * as THREE from 'three';
 
 /**
- * Tạo PerspectiveCamera — ma trận chiếu phối cảnh (Projection Matrix)
- * P = frustum(fov, aspect, near, far)
- * Chuyển tọa độ thế giới 3D → tọa độ clip → NDC → tọa độ màn hình 2D.
+ * Tạo PerspectiveCamera — ma trận chiếu phối cảnh:
+ *   P = perspective(fov, aspect, near, far)
  */
 export function createCamera() {
   const camera = new THREE.PerspectiveCamera(
-    75, // FOV (Field of View)
+    60,
     window.innerWidth / window.innerHeight,
-    0.1, // near clipping plane
-    2000 // far clipping plane — tăng lên vì scene rộng hơn
+    0.1,
+    3000
   );
-  camera.position.set(0, 5, 110);
+  camera.position.set(0, 40, 90);
   return camera;
 }
 
 /**
- * Điều khiển góc nhìn thứ nhất (FPS):
- *   WASD — Tịnh tiến (Translation) trên mặt phẳng XZ
- *   Chuột — Xoay (Rotation) yaw/pitch dùng Euler angles hệ YXZ
- *   [ / ] — Thay đổi near/far clipping planes
- *   1-9  — Teleport đến hành tinh
+ * Orbit Camera — tự viết, không dùng OrbitControls.
  *
- * controls.disabled = true → vô hiệu WASD khi đang thao tác Affine lên vật thể.
+ * Dùng hệ tọa độ cầu (spherical coordinates):
+ *   x = target.x + r·sinφ·sinθ
+ *   y = target.y + r·cosφ
+ *   z = target.z + r·sinφ·cosθ
+ *
+ * Trong đó:
+ *   θ (theta) = góc xoay ngang (azimuthal)
+ *   φ (phi)   = góc đứng từ cực trên (polar)
+ *   r = khoảng cách camera đến target
+ *
+ * Chuyển mượt bằng nội suy tuyến tính (lerp) mỗi frame.
  */
-export function setupFirstPersonControls(camera, domElement) {
-  const moveSpeed = 25;
-  const lookSpeed = 0.002;
+export function setupOrbitCamera(camera, domElement) {
+  let theta = 0.0;
+  let phi = 1.1;
+  let distance = 90;
 
-  const keys = { w: false, a: false, s: false, d: false };
-  let yaw = 0;
-  let pitch = 0;
+  let desiredTarget = new THREE.Vector3(0, 0, 0);
+  let desiredDistance = 90;
+  let desiredPhi = 1.1;
+
+  const target = new THREE.Vector3(0, 0, 0);
 
   let near = 0.1;
-  let far = 2000;
-  let clipMode = 'normal';
+  let far = 3000;
 
-  const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-  const direction = new THREE.Vector3();
-  const right = new THREE.Vector3();
-  const up = new THREE.Vector3(0, 1, 0);
+  let dragging = false;
+  let panning = false;
+  let lastMouse = [0, 0];
+  let mouseMoved = false;
 
-  // Khóa con trỏ chuột khi click canvas
-  domElement.addEventListener('click', () => {
-    if (!controls.disabled) {
-      domElement.requestPointerLock();
+  const PHI_MIN = 0.08;
+  const PHI_MAX = Math.PI - 0.08;
+
+  domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  domElement.addEventListener('mousedown', (e) => {
+    dragging = e.button === 0;
+    panning = e.button === 2 || e.button === 1;
+    lastMouse = [e.clientX, e.clientY];
+    mouseMoved = false;
+  });
+
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    panning = false;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    const dx = e.clientX - lastMouse[0];
+    const dy = e.clientY - lastMouse[1];
+    lastMouse = [e.clientX, e.clientY];
+
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) mouseMoved = true;
+
+    if (dragging) {
+      // Xoay camera: thay đổi θ (ngang) và φ (đứng)
+      theta -= dx * 0.006;
+      desiredPhi = Math.min(PHI_MAX, Math.max(PHI_MIN, desiredPhi + dy * 0.006));
+    }
+
+    if (panning) {
+      // Pan: dịch target theo hướng phải và lên
+      const right = new THREE.Vector3(Math.cos(theta), 0, -Math.sin(theta));
+      const up = new THREE.Vector3(0, 1, 0);
+      const panScale = distance * 0.0016;
+      desiredTarget.addScaledVector(right, -dx * panScale);
+      desiredTarget.addScaledVector(up, dy * panScale);
+      controls.focusIndex = -1;
     }
   });
 
-  document.addEventListener('mousemove', (event) => {
-    if (document.pointerLockElement !== domElement) return;
+  domElement.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    desiredDistance *= Math.exp(e.deltaY * 0.001);
+    desiredDistance = Math.max(3.0, Math.min(300.0, desiredDistance));
+  }, { passive: false });
 
-    yaw -= event.movementX * lookSpeed;
-    pitch -= event.movementY * lookSpeed;
-
-    const limit = Math.PI / 2 - 0.01;
-    pitch = Math.max(-limit, Math.min(limit, pitch));
-  });
-
-  document.addEventListener('keydown', (event) => {
-    const key = event.key.toLowerCase();
-    if (key in keys) keys[key] = true;
-
-    if (event.key === '[') {
-      clipMode = 'clipped';
+  // Phím [ / ]: thay đổi near/far clipping planes
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '[') {
       near = 5;
       far = 50;
-      applyClipPlanes();
+      applyClip();
     }
-
-    if (event.key === ']') {
-      clipMode = 'normal';
+    if (e.key === ']') {
       near = 0.1;
-      far = 2000;
-      applyClipPlanes();
-    }
-
-    // Teleport camera — phím 1-9 bay đến hành tinh
-    const digit = parseInt(event.key, 10);
-    if (digit >= 1 && digit <= 9 && controls.teleportFn) {
-      controls.teleportFn(digit - 1);
+      far = 3000;
+      applyClip();
     }
   });
 
-  document.addEventListener('keyup', (event) => {
-    const key = event.key.toLowerCase();
-    if (key in keys) keys[key] = false;
-  });
-
-  const controls = {
-    disabled: false,
-    onClipChange: null,
-    teleportFn: null,
-
-    update(delta) {
-      // Luôn cập nhật hướng nhìn (xoay camera)
-      euler.set(pitch, yaw, 0);
-      camera.quaternion.setFromEuler(euler);
-
-      // WASD chỉ hoạt động khi KHÔNG đang thao tác vật thể
-      if (controls.disabled) return;
-
-      camera.getWorldDirection(direction);
-      direction.y = 0;
-      direction.normalize();
-
-      right.crossVectors(direction, up).normalize();
-
-      const v = moveSpeed * delta;
-      if (keys.w) camera.position.addScaledVector(direction, v);
-      if (keys.s) camera.position.addScaledVector(direction, -v);
-      if (keys.a) camera.position.addScaledVector(right, -v);
-      if (keys.d) camera.position.addScaledVector(right, v);
-    },
-
-    getClipMode: () => clipMode,
-  };
-
-  function applyClipPlanes() {
+  function applyClip() {
     camera.near = near;
     camera.far = far;
     camera.updateProjectionMatrix();
-
-    if (controls.onClipChange) {
-      controls.onClipChange(near, far);
-    }
+    if (controls.onClipChange) controls.onClipChange(near, far);
   }
+
+  /**
+   * Focus vào hành tinh: đặt desiredTarget & desiredDistance.
+   * Nếu index < 0 → quay về toàn cảnh.
+   */
+  function focusPlanet(index, getPosFunc, getRadiusFunc) {
+    controls.focusIndex = index;
+    if (index < 0) {
+      desiredTarget.set(0, 0, 0);
+      desiredDistance = 90;
+      desiredPhi = 1.1;
+      return;
+    }
+    const pos = getPosFunc(index);
+    desiredTarget.copy(pos);
+    const r = getRadiusFunc ? getRadiusFunc(index) : 2;
+    desiredDistance = r * 5 + 8;
+    desiredPhi = 1.05;
+  }
+
+  const controls = {
+    focusIndex: -1,
+    onClipChange: null,
+    focusPlanet,
+
+    /** Cập nhật mỗi frame — lerp tọa độ cầu rồi chuyển sang Descartes */
+    update(getPosFunc) {
+      // Nếu đang focus, liên tục cập nhật target theo vị trí hành tinh
+      if (controls.focusIndex >= 0 && getPosFunc) {
+        const pos = getPosFunc(controls.focusIndex);
+        desiredTarget.copy(pos);
+      }
+
+      target.lerp(desiredTarget, 0.08);
+      distance += (desiredDistance - distance) * 0.06;
+      phi += (desiredPhi - phi) * 0.04;
+
+      // Tọa độ cầu → Descartes
+      const sinPhi = Math.sin(phi);
+      const x = target.x + distance * sinPhi * Math.sin(theta);
+      const y = target.y + distance * Math.cos(phi);
+      const z = target.z + distance * sinPhi * Math.cos(theta);
+
+      camera.position.set(x, y, z);
+      camera.lookAt(target);
+    },
+
+    /** Click không drag = raycast (trả về true nếu là click thuần) */
+    wasClick() {
+      return !mouseMoved;
+    },
+
+    getTarget() { return target; },
+  };
 
   return controls;
 }
