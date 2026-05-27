@@ -51,10 +51,29 @@ function createProceduralTex(hexA, hexB, hexC, seed = 1) {
       for (let x = 0; x < w; x++) {
         const u = x / w;
         const v = y / h;
-        const band = 0.5 + 0.5 * Math.sin(v * 32 + pseudo(Math.floor(u * 18), Math.floor(v * 12), seed) * 4);
-        const spot = pseudo(Math.floor(u * 64), Math.floor(v * 32), seed + 7);
-        let c = lerpColor(cA, cB, band);
-        if (spot > 0.78) c = lerpColor(c, cC, 0.45);
+
+        // Dải ngang (latitude bands) rõ nét hơn
+        const band = 0.5 + 0.5 * Math.sin(v * 20 + pseudo(Math.floor(u * 12), Math.floor(v * 8), seed) * 6);
+        // Nhiễu xoáy (turbulence)
+        const turb = pseudo(Math.floor(u * 40), Math.floor(v * 20), seed + 3) * 0.3;
+        // Đốm sáng
+        const spot = pseudo(Math.floor(u * 48), Math.floor(v * 24), seed + 7);
+
+        const t = Math.min(1, Math.max(0, band + turb));
+        let c = lerpColor(cA, cB, t);
+
+        // Đốm màu thứ 3 — tương phản cao hơn
+        if (spot > 0.72) c = lerpColor(c, cC, 0.55);
+
+        // Boost saturation: kéo xa khỏi xám
+        const gray = (c[0] + c[1] + c[2]) / 3;
+        const sat = 1.4;
+        c = [
+          Math.min(1, gray + (c[0] - gray) * sat),
+          Math.min(1, gray + (c[1] - gray) * sat),
+          Math.min(1, gray + (c[2] - gray) * sat),
+        ];
+
         ctx.fillStyle = rgb01ToCss(c);
         ctx.fillRect(x, y, 1, 1);
       }
@@ -136,6 +155,7 @@ export function createSolarSystem() {
 
   // ── PointLight tại tâm Mặt Trời ──
   const sunLight = new THREE.PointLight(0xfff5dd, 350, 400);
+  sunLight.name = 'SunLight';
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(1024, 1024);
   group.add(sunLight);
@@ -154,8 +174,8 @@ export function createSolarSystem() {
     const planetGeo = new THREE.SphereGeometry(d.radius, 48, 32);
     const planetMat = new THREE.MeshStandardMaterial({
       map: createProceduralTex(d.colA, d.colB, d.colC, d.seed),
-      roughness: 0.65,
-      metalness: 0.08,
+      roughness: 0.45,
+      metalness: 0.15,
     });
     const mesh = new THREE.Mesh(planetGeo, planetMat);
     mesh.name = d.name;
@@ -254,26 +274,32 @@ export function createSolarSystem() {
   // UPDATE — gọi mỗi frame
   // ====================================================================
 
+  // Tập hợp mesh đang bị chọn (Interaction sẽ set vào đây)
+  let selectedMesh = null;
+
+  function setSelectedMesh(mesh) { selectedMesh = mesh; }
+
   function update(elapsed, speed) {
     timeUniform.value = elapsed;
 
-    // Sun glow nhấp nhô
     const gs = 7.5 * (1.0 + Math.sin(elapsed * 2.0) * 0.025);
     sunGlow.scale.setScalar(gs);
 
-    // Hành tinh: quay quỹ đạo + tự quay
+    // Quỹ đạo — luôn xoay (không ảnh hưởng bởi selection)
     PLANET_DATA.forEach((d, i) => {
       orbitGroups[i].rotation.y = d.startAngle + elapsed * d.speed * 0.15;
     });
 
+    // Tự quay — BỎ QUA nếu mesh đang được chọn (để Affine transform không bị ghi đè)
     planets.forEach((p) => {
+      if (p.mesh === selectedMesh) return;
+
       if (p.mesh.name === 'Mặt Trăng') {
         p.orbitGroup.rotation.y = elapsed * 1.2;
       }
       p.mesh.rotation.y = elapsed * (p.data.selfSpin || 0.5) * 0.3;
     });
 
-    // Thiên thạch quay chậm
     asteroidBelt.rotation.y = elapsed * 0.08;
   }
 
@@ -292,8 +318,8 @@ export function createSolarSystem() {
   }
 
   return {
-    group, planets, orbitGroups, sun, sunGlow,
-    update, getPlanetWorldPos, toggleOrbits,
+    group, planets, orbitGroups, sun, sunGlow, sunLight,
+    update, getPlanetWorldPos, toggleOrbits, setSelectedMesh,
     PLANET_DATA,
   };
 }

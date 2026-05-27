@@ -33,7 +33,7 @@ function init() {
   };
 
   // ── Raycaster + Affine ──
-  const interaction = setupInteraction(camera, scene, renderer, camControls);
+  const interaction = setupInteraction(camera, scene, renderer, camControls, solarSystem);
   setupTextureUpload(interaction);
 
   // ── Light toggles ──
@@ -147,6 +147,7 @@ function setupLightToggles(lights, solarSystem) {
   const map = {
     'toggle-ambient': lights.ambientLight,
     'toggle-directional': lights.directionalLight,
+    'toggle-sunlight': solarSystem.sunLight,
   };
 
   Object.entries(map).forEach(([id, light]) => {

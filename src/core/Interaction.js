@@ -11,7 +11,7 @@ import * as THREE from 'three';
 
 const MODES = ['translate', 'rotate', 'scale'];
 
-export function setupInteraction(camera, scene, renderer, cameraControls) {
+export function setupInteraction(camera, scene, renderer, cameraControls, solarSystem) {
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
@@ -19,9 +19,10 @@ export function setupInteraction(camera, scene, renderer, cameraControls) {
   let previousEmissive = null;
   let currentMode = 0;
 
-  const TRANSLATE_SPEED = 0.5;
-  const ROTATE_SPEED = 0.05;
-  const SCALE_SPEED = 0.05;
+  // Tốc độ đủ lớn để thấy rõ khi bấm mũi tên
+  const TRANSLATE_SPEED = 2.0;
+  const ROTATE_SPEED = 0.15;
+  const SCALE_SPEED = 0.1;
 
   function getPickableObjects() {
     const pickable = [];
@@ -58,9 +59,12 @@ export function setupInteraction(camera, scene, renderer, cameraControls) {
 
     if (selectedObject.material && selectedObject.material.emissive) {
       previousEmissive = selectedObject.material.emissive.getHex();
-      selectedObject.material.emissive.setHex(0x335599);
-      selectedObject.material.emissiveIntensity = 0.6;
+      selectedObject.material.emissive.setHex(0x4488cc);
+      selectedObject.material.emissiveIntensity = 0.8;
     }
+
+    // Thông báo SolarSystem ngừng ghi đè rotation cho mesh này
+    if (solarSystem) solarSystem.setSelectedMesh(selectedObject);
 
     updateSelectionHUD();
   }
@@ -69,6 +73,7 @@ export function setupInteraction(camera, scene, renderer, cameraControls) {
     if (selectedObject) restoreEmissive(selectedObject);
     selectedObject = null;
     previousEmissive = null;
+    if (solarSystem) solarSystem.setSelectedMesh(null);
     updateSelectionHUD();
   }
 

@@ -20,13 +20,13 @@ export function createScene() {
 
   // ── Ánh sáng ──
 
-  // AmbientLight cực tối — vùng khuất tối như vũ trụ thực
-  const ambientLight = new THREE.AmbientLight(0x080812, 0.4);
+  // AmbientLight — tăng intensity để bật/tắt thấy rõ sự khác biệt
+  const ambientLight = new THREE.AmbientLight(0x334466, 1.0);
   ambientLight.name = 'AmbientLight';
   scene.add(ambientLight);
 
-  // DirectionalLight phụ — chiếu sáng bổ sung từ phía xa
-  const directionalLight = new THREE.DirectionalLight(0xfff5e6, 0.6);
+  // DirectionalLight — tăng lên để thấy rõ bóng đổ + highlight
+  const directionalLight = new THREE.DirectionalLight(0xfff5e6, 1.5);
   directionalLight.name = 'DirectionalLight';
   directionalLight.position.set(50, 40, 30);
   directionalLight.castShadow = true;
