@@ -15,20 +15,13 @@ export function createCamera() {
   return camera;
 }
 
+/** Các bước far — giảm dần để thấy hành tinh xa biến mất (không đen cả màn hình ngay). */
+const FAR_STEPS = [3000, 2000, 1200, 700, 400, 220, 120];
+/** Các bước near — tăng dần để cắt vật quá gần camera (rõ khi focus gần hành tinh). */
+const NEAR_STEPS = [0.1, 0.5, 2, 8, 20, 50];
+
 /**
  * Orbit Camera — tự viết, không dùng OrbitControls.
- *
- * Dùng hệ tọa độ cầu (spherical coordinates):
- *   x = target.x + r·sinφ·sinθ
- *   y = target.y + r·cosφ
- *   z = target.z + r·sinφ·cosθ
- *
- * Trong đó:
- *   θ (theta) = góc xoay ngang (azimuthal)
- *   φ (phi)   = góc đứng từ cực trên (polar)
- *   r = khoảng cách camera đến target
- *
- * Chuyển mượt bằng nội suy tuyến tính (lerp) mỗi frame.
  */
 export function setupOrbitCamera(camera, domElement) {
   let theta = 0.0;
@@ -41,8 +34,10 @@ export function setupOrbitCamera(camera, domElement) {
 
   const target = new THREE.Vector3(0, 0, 0);
 
-  let near = 0.1;
-  let far = 3000;
+  let near = NEAR_STEPS[0];
+  let far = FAR_STEPS[0];
+  let farStepIndex = 0;
+  let nearStepIndex = 0;
 
   let dragging = false;
   let panning = false;
@@ -74,13 +69,11 @@ export function setupOrbitCamera(camera, domElement) {
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) mouseMoved = true;
 
     if (dragging) {
-      // Xoay camera: thay đổi θ (ngang) và φ (đứng)
       theta -= dx * 0.006;
       desiredPhi = Math.min(PHI_MAX, Math.max(PHI_MIN, desiredPhi + dy * 0.006));
     }
 
     if (panning) {
-      // Pan: dịch target theo hướng phải và lên
       const right = new THREE.Vector3(Math.cos(theta), 0, -Math.sin(theta));
       const up = new THREE.Vector3(0, 1, 0);
       const panScale = distance * 0.0016;
@@ -96,31 +89,66 @@ export function setupOrbitCamera(camera, domElement) {
     desiredDistance = Math.max(3.0, Math.min(300.0, desiredDistance));
   }, { passive: false });
 
-  // Phím [ / ]: thay đổi near/far clipping planes
-  document.addEventListener('keydown', (e) => {
-    if (e.key === '[') {
-      near = 5;
-      far = 50;
-      applyClip();
-    }
-    if (e.key === ']') {
-      near = 0.1;
-      far = 3000;
-      applyClip();
-    }
-  });
-
   function applyClip() {
     camera.near = near;
     camera.far = far;
     camera.updateProjectionMatrix();
-    if (controls.onClipChange) controls.onClipChange(near, far);
+    if (controls.onClipChange) controls.onClipChange(getClipState());
+  }
+
+  function getClipState() {
+    let hint = '';
+    if (farStepIndex > 0) {
+      hint = `Far=${far}: vật xa hơn ${far} đơn vị bị cắt (mờ dần/biến mất)`;
+    } else if (nearStepIndex > 0) {
+      hint = `Near=${near}: vật gần camera hơn ${near} đơn vị bị cắt`;
+    } else {
+      hint = 'Mặc định — thấy toàn bộ hệ Mặt Trời';
+    }
+    return { near, far, farStepIndex, nearStepIndex, hint };
   }
 
   /**
-   * Focus vào hành tinh: đặt desiredTarget & desiredDistance.
-   * Nếu index < 0 → quay về toàn cảnh.
+   * [ — thu hẹp vùng nhìn (từng bước, dễ thấy).
+   *   Không Shift: giảm far → hành tinh xa dần biến mất.
+   *   Shift+[ : tăng near → cắt vật quá gần (thử khi focus phím 1–8).
    */
+  function clipTighten(shiftKey = false) {
+    if (shiftKey) {
+      nearStepIndex = Math.min(NEAR_STEPS.length - 1, nearStepIndex + 1);
+      near = NEAR_STEPS[nearStepIndex];
+    } else {
+      farStepIndex = Math.min(FAR_STEPS.length - 1, farStepIndex + 1);
+      far = FAR_STEPS[farStepIndex];
+    }
+    applyClip();
+    return getClipState();
+  }
+
+  /**
+   * ] — mở rộng lại vùng nhìn (ngược với [).
+   */
+  function clipLoosen(shiftKey = false) {
+    if (shiftKey) {
+      nearStepIndex = Math.max(0, nearStepIndex - 1);
+      near = NEAR_STEPS[nearStepIndex];
+    } else {
+      farStepIndex = Math.max(0, farStepIndex - 1);
+      far = FAR_STEPS[farStepIndex];
+    }
+    applyClip();
+    return getClipState();
+  }
+
+  function clipReset() {
+    farStepIndex = 0;
+    nearStepIndex = 0;
+    near = NEAR_STEPS[0];
+    far = FAR_STEPS[0];
+    applyClip();
+    return getClipState();
+  }
+
   function focusPlanet(index, getPosFunc, getRadiusFunc) {
     controls.focusIndex = index;
     if (index < 0) {
@@ -140,10 +168,12 @@ export function setupOrbitCamera(camera, domElement) {
     focusIndex: -1,
     onClipChange: null,
     focusPlanet,
+    clipTighten,
+    clipLoosen,
+    clipReset,
+    getClipState,
 
-    /** Cập nhật mỗi frame — lerp tọa độ cầu rồi chuyển sang Descartes */
     update(getPosFunc) {
-      // Nếu đang focus, liên tục cập nhật target theo vị trí hành tinh
       if (controls.focusIndex >= 0 && getPosFunc) {
         const pos = getPosFunc(controls.focusIndex);
         desiredTarget.copy(pos);
@@ -153,7 +183,6 @@ export function setupOrbitCamera(camera, domElement) {
       distance += (desiredDistance - distance) * 0.06;
       phi += (desiredPhi - phi) * 0.04;
 
-      // Tọa độ cầu → Descartes
       const sinPhi = Math.sin(phi);
       const x = target.x + distance * sinPhi * Math.sin(theta);
       const y = target.y + distance * Math.cos(phi);
@@ -163,7 +192,6 @@ export function setupOrbitCamera(camera, domElement) {
       camera.lookAt(target);
     },
 
-    /** Click không drag = raycast (trả về true nếu là click thuần) */
     wasClick() {
       return !mouseMoved;
     },
@@ -171,5 +199,6 @@ export function setupOrbitCamera(camera, domElement) {
     getTarget() { return target; },
   };
 
+  applyClip();
   return controls;
 }

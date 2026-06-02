@@ -4,15 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SpaceTravel — CS105</title>
+
+    <!-- Font Sci-Fi: Orbitron (tiêu đề) + Roboto Mono (nội dung) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Roboto+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
 
       body {
         overflow: hidden;
         background: #000;
-        font-family: 'Segoe UI', Tahoma, sans-serif;
+        font-family: 'Roboto Mono', 'Courier New', monospace;
         color: #e0f2ff;
       }
+
+      h1, h4, .hud-section { font-family: 'Orbitron', 'Roboto Mono', monospace; }
 
       /* ── HUD góc trái ── */
       #hud {
@@ -51,12 +62,16 @@
       .hud-section {
         color: #66ccff;
         font-weight: bold;
-        margin-top: 5px;
+        margin-top: 9px;
+        margin-bottom: 2px;
         display: block;
+        font-size: 12px;
+        letter-spacing: 0.4px;
       }
 
-      #clip-info { color: #aaccdd; }
-      #selection-info { color: #ffcc44; font-style: italic; }
+      .hud-line { margin: 1px 0; }
+      .hud-hint { color: #8fa9bb; font-size: 11px; font-style: italic; }
+      #hud b { color: #9ad9ff; font-weight: 600; }
 
       /* ── Info box góc phải trên ── */
       #infoBox {
@@ -127,6 +142,71 @@
         color: #fff;
       }
 
+      /* ── Affine: hành tinh đang chọn + D-pad ── */
+      #affine-selected {
+        font-size: 11px;
+        margin-bottom: 6px;
+        padding: 3px 6px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px dashed rgba(255, 255, 255, 0.18);
+        color: #99aabb;
+      }
+      #affine-selected.has-target {
+        color: #6effc0;
+        border-color: rgba(110, 255, 192, 0.5);
+        background: rgba(40, 120, 90, 0.18);
+      }
+
+      /* Khoá mode + dpad khi chưa chọn hành tinh */
+      .affine-locked .mode-btn,
+      .affine-locked .dpad button {
+        opacity: 0.4;
+        pointer-events: none;
+      }
+
+      .dpad {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-areas:
+          '. up .'
+          'left mid right'
+          '. down .';
+        gap: 4px;
+        margin-top: 6px;
+      }
+      .dpad button {
+        padding: 6px 0;
+        border: 1px solid rgba(120, 200, 255, 0.35);
+        border-radius: 5px;
+        background: rgba(50, 140, 255, 0.12);
+        color: #cfe8ff;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.12s;
+      }
+      .dpad button:hover { background: rgba(80, 170, 255, 0.3); }
+      .dpad button:active { background: rgba(120, 200, 255, 0.55); }
+      .dpad .up { grid-area: up; }
+      .dpad .down { grid-area: down; }
+      .dpad .left { grid-area: left; }
+      .dpad .right { grid-area: right; }
+      .dpad .mid {
+        grid-area: mid;
+        font-size: 10px;
+        background: transparent;
+        border: none;
+        color: #6688aa;
+        cursor: default;
+      }
+
+      #affine-mode-hint {
+        margin-top: 6px;
+        font-size: 10px;
+        color: #ffcc66;
+        line-height: 1.4;
+      }
+
       .light-toggle {
         display: flex;
         align-items: center;
@@ -150,6 +230,66 @@
         cursor: pointer;
         font-size: 10px;
       }
+
+      /* ── Speed control slider ── */
+      .speed-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
+      #speed-value {
+        font-family: 'Orbitron', monospace;
+        font-size: 12px;
+        color: #4fd2ff;
+        text-shadow: 0 0 6px rgba(79, 210, 255, 0.6);
+      }
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 4px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #1b3a5c, #4499ff);
+        outline: none;
+        cursor: pointer;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #aee3ff;
+        border: 1px solid #4fd2ff;
+        box-shadow: 0 0 8px rgba(79, 210, 255, 0.9);
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #aee3ff;
+        border: 1px solid #4fd2ff;
+        box-shadow: 0 0 8px rgba(79, 210, 255, 0.9);
+      }
+
+      /* ── CSS2D label tên hành tinh ── */
+      .planet-label {
+        font-family: 'Roboto Mono', 'Courier New', monospace;
+        font-size: 11px;
+        letter-spacing: 1px;
+        color: #dff3ff;
+        background: rgba(0, 10, 25, 0.45);
+        border: 1px solid rgba(120, 200, 255, 0.5);
+        border-radius: 6px;
+        padding: 2px 8px;
+        white-space: nowrap;
+        text-shadow: 0 0 6px rgba(80, 180, 255, 0.7);
+        box-shadow: 0 0 10px rgba(60, 150, 255, 0.25);
+        backdrop-filter: blur(2px);
+        pointer-events: none;
+        user-select: none;
+      }
     </style>
   </head>
   <body>
@@ -159,24 +299,22 @@
       <p><b>Three.js + Custom GLSL Shaders</b></p>
 
       <span class="hud-section">Camera</span>
-      <kbd>Chuột trái</kbd> xoay &nbsp;
-      <kbd>Cuộn</kbd> zoom &nbsp;
-      <kbd>Chuột phải</kbd> pan<br />
-      <kbd>1</kbd>–<kbd>8</kbd> focus hành tinh &nbsp;
-      <kbd>0</kbd> toàn cảnh<br />
+      <div class="hud-line"><kbd>Chuột trái</kbd> xoay · <kbd>Cuộn</kbd> zoom · <kbd>Chuột phải</kbd> pan</div>
+      <div class="hud-line"><kbd>1</kbd>–<kbd>8</kbd> focus hành tinh · <kbd>0</kbd> toàn cảnh</div>
 
-      <span class="hud-section">Điều khiển</span>
-      <kbd>Space</kbd> dừng/chạy &nbsp;
-      <kbd>O</kbd> quỹ đạo &nbsp;
-      <kbd>S</kbd> shadow<br />
-      <kbd>+</kbd>/<kbd>-</kbd> tốc độ &nbsp;
-      <kbd>[</kbd><kbd>]</kbd> near/far<br />
-      <span id="clip-info">Near: 0.1 | Far: 3000</span><br />
+      <span class="hud-section">Hiển thị</span>
+      <div class="hud-line"><kbd>Space</kbd> dừng/chạy · <kbd>O</kbd> quỹ đạo · <kbd>+</kbd>/<kbd>−</kbd> tốc độ</div>
+      <div class="hud-line"><kbd>S</kbd> shadow → <b id="shadow-status">Bật</b></div>
+      <div class="hud-line"><kbd>L</kbd> label → <b id="label-status">Bật</b></div>
 
-      <span class="hud-section">Chọn vật thể (Affine)</span>
-      Click hành tinh → <kbd>↑↓←→</kbd> biến đổi &nbsp;
-      <kbd>ESC</kbd> bỏ chọn<br />
-      <span id="selection-info">Click vật thể để chọn</span>
+      <span class="hud-section">Clipping (Near / Far)</span>
+      <div class="hud-line"><kbd>[</kbd> thu hẹp · <kbd>]</kbd> mở rộng · <kbd>\</kbd> reset</div>
+      <div class="hud-line"><b id="clip-info">Near: 0.1 | Far: 3000</b></div>
+      <div class="hud-line hud-hint" id="clip-hint">Mặc định — thấy toàn bộ hệ Mặt Trời</div>
+
+      <span class="hud-section">Biến đổi Affine</span>
+      <div class="hud-line">Click 1 hành tinh, rồi dùng bảng điều khiển bên phải</div>
+      <div class="hud-line" id="selection-info" style="color:#ffcc44;font-style:italic">Chưa chọn hành tinh nào</div>
     </div>
 
     <!-- Info box -->
@@ -188,13 +326,34 @@
     <!-- Control panel -->
     <div id="control-panel">
       <div class="panel-group">
-        <h4>Mode biến đổi Affine</h4>
+        <h4>Speed Control</h4>
+        <div class="speed-row">
+          <span>Tốc độ quỹ đạo</span>
+          <span id="speed-value">1.00x</span>
+        </div>
+        <input type="range" id="speed-slider" min="0" max="4" step="0.05" value="1" />
+      </div>
+
+      <div class="panel-group affine-locked" id="affine-panel">
+        <h4>Biến đổi Affine</h4>
+        <div id="affine-selected">Chưa chọn hành tinh</div>
+
         <button class="mode-btn active" id="btn-mode-translate"
           onclick="window.__interactionSetMode(0)">Tịnh tiến (Translate)</button>
         <button class="mode-btn" id="btn-mode-rotate"
           onclick="window.__interactionSetMode(1)">Quay (Rotate)</button>
         <button class="mode-btn" id="btn-mode-scale"
           onclick="window.__interactionSetMode(2)">Tỉ lệ (Scale)</button>
+
+        <div class="dpad">
+          <button class="up" data-affine="up" title="↑">↑</button>
+          <button class="left" data-affine="left" title="←">←</button>
+          <button class="mid">áp&nbsp;dụng</button>
+          <button class="right" data-affine="right" title="→">→</button>
+          <button class="down" data-affine="down" title="↓">↓</button>
+        </div>
+
+        <div id="affine-mode-hint">Chọn hành tinh để bật điều khiển</div>
       </div>
 
       <div class="panel-group">

@@ -20,13 +20,12 @@ export function createScene() {
 
   // ── Ánh sáng ──
 
-  // AmbientLight — tăng intensity để bật/tắt thấy rõ sự khác biệt
-  const ambientLight = new THREE.AmbientLight(0x334466, 1.0);
+  // Ambient — giảm khi bật shadow để bóng đổ tương phản hơn
+  const ambientLight = new THREE.AmbientLight(0x334466, 0.35);
   ambientLight.name = 'AmbientLight';
   scene.add(ambientLight);
 
-  // DirectionalLight — tăng lên để thấy rõ bóng đổ + highlight
-  const directionalLight = new THREE.DirectionalLight(0xfff5e6, 1.5);
+  const directionalLight = new THREE.DirectionalLight(0xfff5e6, 1.8);
   directionalLight.name = 'DirectionalLight';
   directionalLight.position.set(50, 40, 30);
   directionalLight.castShadow = true;
@@ -37,8 +36,26 @@ export function createScene() {
   directionalLight.shadow.camera.right = 80;
   directionalLight.shadow.camera.top = 80;
   directionalLight.shadow.camera.bottom = -80;
-  directionalLight.shadow.bias = -0.0005;
+  directionalLight.shadow.bias = -0.001;      // khử shadow acne (vân kẻ sọc)
+  directionalLight.shadow.normalBias = 0.05;  // đẩy theo normal cho cạnh mượt
   scene.add(directionalLight);
+
+  // ── Mặt phẳng hứng bóng (ecliptic) — giúp thấy shadow map khi bấm S ──
+  const shadowPlane = new THREE.Mesh(
+    new THREE.CircleGeometry(130, 96),
+    new THREE.MeshStandardMaterial({
+      color: 0x0a0a18,
+      roughness: 1,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.45,
+    })
+  );
+  shadowPlane.rotation.x = -Math.PI / 2;
+  shadowPlane.position.y = -0.5;
+  shadowPlane.receiveShadow = true;
+  shadowPlane.name = '__shadowPlane';
+  scene.add(shadowPlane);
 
   // ── Hệ Mặt Trời ──
   const solarSystem = createSolarSystem();
@@ -47,6 +64,7 @@ export function createScene() {
   return {
     scene,
     skySphere,
+    shadowPlane,
     lights: { ambientLight, directionalLight },
     solarSystem,
   };

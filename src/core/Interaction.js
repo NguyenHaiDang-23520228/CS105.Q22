@@ -1,28 +1,28 @@
 import * as THREE from 'three';
 
 /**
- * Raycaster + 3 chế độ biến đổ Affine thủ công.
- *
- * Click chuột (không drag) → Raycaster chọn vật thể.
- * Phím mũi tên → biến đổi vật thể theo mode đang chọn.
- *
- * Tương thích Orbit Camera (không cần pointer lock).
+ * Raycaster + 3 chế đổi Affine thủ công (Tịnh tiến / Quay / Tỉ lệ).
  */
-
 const MODES = ['translate', 'rotate', 'scale'];
+const MODE_LABELS = [
+  'Tịnh tiến · ↑↓ = trục Z · ←→ = trục X',
+  'Quay · ↑↓ = quanh trục X · ←→ = quanh trục Y',
+  'Tỉ lệ · ↑ to ra · ↓ nhỏ lại · ←→ kéo trục X',
+];
 
-export function setupInteraction(camera, scene, renderer, cameraControls, solarSystem) {
+export function setupInteraction(camera, scene, renderer, cameraControls, solarSystem, hooks = {}) {
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
   let selectedObject = null;
-  let previousEmissive = null;
   let currentMode = 0;
+  let selectionBox = null;
 
-  // Tốc độ đủ lớn để thấy rõ khi bấm mũi tên
-  const TRANSLATE_SPEED = 2.0;
-  const ROTATE_SPEED = 0.15;
-  const SCALE_SPEED = 0.1;
+  const emissiveState = new WeakMap();
+
+  const TRANSLATE_SPEED = 5.0;
+  const ROTATE_SPEED = 0.35;
+  const SCALE_SPEED = 0.22;
 
   function getPickableObjects() {
     const pickable = [];
@@ -34,7 +34,6 @@ export function setupInteraction(camera, scene, renderer, cameraControls, solarS
     return pickable;
   }
 
-  // Click = mouseup sau khi không drag
   renderer.domElement.addEventListener('mouseup', (event) => {
     if (event.button !== 0) return;
     if (!cameraControls.wasClick()) return;
@@ -46,47 +45,86 @@ export function setupInteraction(camera, scene, renderer, cameraControls, solarS
     const intersects = raycaster.intersectObjects(getPickableObjects(), false);
 
     if (intersects.length > 0) {
-      selectObject(intersects[0].object);
+      const obj = intersects[0].object;
+      if (selectedObject === obj) {
+        deselectObject();
+      } else {
+        selectObject(obj);
+      }
     } else {
       deselectObject();
     }
   });
 
+  function attachSelectionBox(obj) {
+    if (selectionBox) {
+      scene.remove(selectionBox);
+      selectionBox.dispose();
+      selectionBox = null;
+    }
+    selectionBox = new THREE.BoxHelper(obj, 0x44ffaa);
+    scene.add(selectionBox);
+  }
+
   function selectObject(obj) {
     if (selectedObject && selectedObject !== obj) restoreEmissive(selectedObject);
 
     selectedObject = obj;
+    attachSelectionBox(obj);
 
-    if (selectedObject.material && selectedObject.material.emissive) {
-      previousEmissive = selectedObject.material.emissive.getHex();
+    if (selectedObject.material?.emissive) {
+      if (!emissiveState.has(selectedObject)) {
+        emissiveState.set(selectedObject, {
+          hex: selectedObject.material.emissive.getHex(),
+          intensity: selectedObject.material.emissiveIntensity ?? 1.0,
+        });
+      }
       selectedObject.material.emissive.setHex(0x4488cc);
-      selectedObject.material.emissiveIntensity = 0.8;
+      selectedObject.material.emissiveIntensity = 0.85;
     }
 
-    // Thông báo SolarSystem ngừng ghi đè rotation cho mesh này
-    if (solarSystem) solarSystem.setSelectedMesh(selectedObject);
+    if (solarSystem) {
+      solarSystem.setSelectedMesh(selectedObject);
+      solarSystem.setManualControl(selectedObject);
+    }
 
+    if (hooks.onSelect) hooks.onSelect(selectedObject);
     updateSelectionHUD();
+    updateAffinePanel();
   }
 
   function deselectObject() {
     if (selectedObject) restoreEmissive(selectedObject);
     selectedObject = null;
-    previousEmissive = null;
-    if (solarSystem) solarSystem.setSelectedMesh(null);
+
+    if (selectionBox) {
+      scene.remove(selectionBox);
+      selectionBox.dispose();
+      selectionBox = null;
+    }
+
+    if (solarSystem) {
+      solarSystem.setSelectedMesh(null);
+      solarSystem.setManualControl(null);
+    }
+
+    if (hooks.onDeselect) hooks.onDeselect();
     updateSelectionHUD();
+    updateAffinePanel();
   }
 
   function restoreEmissive(obj) {
-    if (obj.material && obj.material.emissive) {
-      obj.material.emissive.setHex(previousEmissive ?? 0x000000);
-      obj.material.emissiveIntensity = 1.0;
+    if (obj.material?.emissive) {
+      const st = emissiveState.get(obj);
+      obj.material.emissive.setHex(st?.hex ?? 0x000000);
+      obj.material.emissiveIntensity = st?.intensity ?? 1.0;
     }
   }
 
   function setMode(index) {
     currentMode = index;
     updateModeButtons();
+    updateAffinePanel();
   }
 
   function updateModeButtons() {
@@ -100,12 +138,77 @@ export function setupInteraction(camera, scene, renderer, cameraControls, solarS
     const el = document.getElementById('selection-info');
     if (el) {
       el.textContent = selectedObject
-        ? `Đã chọn: ${selectedObject.name}`
-        : 'Click vật thể để chọn';
+        ? `Đang chọn: ${selectedObject.name}`
+        : 'Chưa chọn hành tinh nào';
     }
   }
 
-  document.addEventListener('keydown', (event) => {
+  // Cập nhật panel Affine bên phải: tên hành tinh, mode hint, khoá/mở control
+  function updateAffinePanel() {
+    const panel = document.getElementById('affine-panel');
+    const selEl = document.getElementById('affine-selected');
+    const hintEl = document.getElementById('affine-mode-hint');
+
+    if (panel) panel.classList.toggle('affine-locked', !selectedObject);
+
+    if (selEl) {
+      if (selectedObject) {
+        selEl.textContent = `▶ ${selectedObject.name}`;
+        selEl.classList.add('has-target');
+      } else {
+        selEl.textContent = 'Chưa chọn hành tinh';
+        selEl.classList.remove('has-target');
+      }
+    }
+
+    if (hintEl) {
+      hintEl.textContent = selectedObject
+        ? MODE_LABELS[currentMode]
+        : 'Click 1 hành tinh để bật điều khiển';
+    }
+  }
+
+  /**
+   * Áp dụng 1 bước biến đổi Affine theo hướng + mode hiện tại.
+   * Dùng chung cho cả phím mũi tên và nút D-pad.
+   */
+  function applyAffine(direction, shift = false) {
+    if (!selectedObject) return;
+    const mode = MODES[currentMode];
+
+    if (mode === 'translate') {
+      const d = TRANSLATE_SPEED;
+      if (direction === 'up' && shift) selectedObject.position.y += d;
+      else if (direction === 'down' && shift) selectedObject.position.y -= d;
+      else if (direction === 'up') selectedObject.position.z -= d;
+      else if (direction === 'down') selectedObject.position.z += d;
+      else if (direction === 'left') selectedObject.position.x -= d;
+      else if (direction === 'right') selectedObject.position.x += d;
+    } else if (mode === 'rotate') {
+      const r = ROTATE_SPEED;
+      if (direction === 'up') selectedObject.rotation.x -= r;
+      else if (direction === 'down') selectedObject.rotation.x += r;
+      else if (direction === 'left') selectedObject.rotation.y -= r;
+      else if (direction === 'right') selectedObject.rotation.y += r;
+    } else if (mode === 'scale') {
+      const s = SCALE_SPEED;
+      if (direction === 'up') selectedObject.scale.multiplyScalar(1 + s);
+      else if (direction === 'down') selectedObject.scale.multiplyScalar(Math.max(0.05, 1 - s));
+      else if (direction === 'left') selectedObject.scale.x = Math.max(0.05, selectedObject.scale.x * (1 - s));
+      else if (direction === 'right') selectedObject.scale.x *= (1 + s);
+    }
+
+    if (selectionBox) selectionBox.update();
+    if (hooks.onAffineChange) hooks.onAffineChange(selectedObject, mode);
+  }
+
+  const ARROW_MAP = {
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+  };
+
+  window.addEventListener('keydown', (event) => {
+    const tag = event.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if (!selectedObject) return;
 
     if (event.key === 'Escape') {
@@ -113,41 +216,34 @@ export function setupInteraction(camera, scene, renderer, cameraControls, solarS
       return;
     }
 
-    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+    const dir = ARROW_MAP[event.key];
+    if (!dir) return;
     event.preventDefault();
+    applyAffine(dir, event.shiftKey);
+  });
 
-    const mode = MODES[currentMode];
-
-    if (mode === 'translate') {
-      const d = TRANSLATE_SPEED;
-      if (event.key === 'ArrowUp') selectedObject.position.z -= d;
-      if (event.key === 'ArrowDown') selectedObject.position.z += d;
-      if (event.key === 'ArrowLeft') selectedObject.position.x -= d;
-      if (event.key === 'ArrowRight') selectedObject.position.x += d;
-    } else if (mode === 'rotate') {
-      const r = ROTATE_SPEED;
-      if (event.key === 'ArrowUp') selectedObject.rotation.x -= r;
-      if (event.key === 'ArrowDown') selectedObject.rotation.x += r;
-      if (event.key === 'ArrowLeft') selectedObject.rotation.y -= r;
-      if (event.key === 'ArrowRight') selectedObject.rotation.y += r;
-    } else if (mode === 'scale') {
-      const s = SCALE_SPEED;
-      if (event.key === 'ArrowUp') selectedObject.scale.multiplyScalar(1 + s);
-      if (event.key === 'ArrowDown') selectedObject.scale.multiplyScalar(1 - s);
-      if (event.key === 'ArrowLeft') selectedObject.scale.x *= (1 - s);
-      if (event.key === 'ArrowRight') selectedObject.scale.x *= (1 + s);
-    }
+  // Nút D-pad bấm chuột → di chuyển hành tinh theo mode đang chọn
+  document.querySelectorAll('.dpad button[data-affine]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      applyAffine(btn.getAttribute('data-affine'), e.shiftKey);
+    });
   });
 
   window.__interactionSetMode = setMode;
-  setTimeout(() => { updateModeButtons(); updateSelectionHUD(); }, 0);
+  setTimeout(() => {
+    updateModeButtons();
+    updateSelectionHUD();
+    updateAffinePanel();
+  }, 0);
 
-  return { getSelected: () => selectedObject, setMode, deselectObject };
+  return {
+    getSelected: () => selectedObject,
+    setMode,
+    deselectObject,
+    updateSelectionBox: () => { if (selectionBox) selectionBox.update(); },
+  };
 }
 
-/**
- * Upload texture runtime: đọc ảnh → gán lên vật thể đang chọn.
- */
 export function setupTextureUpload(interactionCtx) {
   const input = document.getElementById('uploadTexture');
   if (!input) return;

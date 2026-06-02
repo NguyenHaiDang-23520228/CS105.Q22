@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { createScene } from './core/Scene.js';
 import { createCamera, setupOrbitCamera } from './core/Camera.js';
 import { createRenderer } from './core/Renderer.js';
@@ -24,16 +25,70 @@ function init() {
   const renderer = createRenderer();
   document.body.appendChild(renderer.domElement);
 
+  // ── CSS2D Renderer — render label tên hành tinh song song với WebGL ──
+  const labelRenderer = new CSS2DRenderer();
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.domElement.style.position = 'fixed';
+  labelRenderer.domElement.style.top = '0';
+  labelRenderer.domElement.style.left = '0';
+  labelRenderer.domElement.style.pointerEvents = 'none';
+  document.body.appendChild(labelRenderer.domElement);
+
   // ── Orbit Camera ──
   const camControls = setupOrbitCamera(camera, renderer.domElement);
 
   const clipInfo = document.getElementById('clip-info');
-  camControls.onClipChange = (near, far) => {
-    if (clipInfo) clipInfo.textContent = `Near: ${near} | Far: ${far}`;
-  };
+  const clipHint = document.getElementById('clip-hint');
+  const shadowStatusEl = document.getElementById('shadow-status');
+
+  function refreshClipHUD(state) {
+    if (clipInfo) clipInfo.textContent = `Near: ${state.near} | Far: ${state.far}`;
+    if (clipHint) clipHint.textContent = state.hint;
+  }
+
+  camControls.onClipChange = refreshClipHUD;
+  refreshClipHUD(camControls.getClipState());
+
+  let shadowsEnabled = true;
+  let pausedForAffine = false;
+
+  function applyShadowMode(enabled) {
+    shadowsEnabled = enabled;
+    renderer.shadowMap.enabled = enabled;
+    lights.ambientLight.intensity = enabled ? 0.35 : 1.1;
+    lights.directionalLight.intensity = enabled ? 1.8 : 0.35;
+
+    scene.traverse((obj) => {
+      if (!obj.isMesh || obj.name?.startsWith('__')) return;
+      if (obj.name === 'Mặt Trời') return;
+      obj.castShadow = enabled;
+      obj.receiveShadow = enabled;
+      if (obj.material) obj.material.needsUpdate = true;
+    });
+
+    if (shadowStatusEl) shadowStatusEl.textContent = enabled ? 'Bật' : 'Tắt';
+  }
+  applyShadowMode(true);
 
   // ── Raycaster + Affine ──
-  const interaction = setupInteraction(camera, scene, renderer, camControls, solarSystem);
+  const interaction = setupInteraction(camera, scene, renderer, camControls, solarSystem, {
+    onSelect: () => {
+      if (!paused) {
+        paused = true;
+        pausedForAffine = true;
+        updateInfoBox('<b>Affine:</b> Đã tạm dừng animation — dùng ↑↓←→');
+      }
+    },
+    onDeselect: () => {
+      if (pausedForAffine) {
+        paused = false;
+        pausedForAffine = false;
+      }
+    },
+    onAffineChange: (obj, mode) => {
+      updateInfoBox(`<b>Affine (${mode}):</b> ${obj.name}`);
+    },
+  });
   setupTextureUpload(interaction);
 
   // ── Light toggles ──
@@ -43,14 +98,37 @@ function init() {
   let paused = false;
   let speed = 1.0;
   let showOrbits = true;
+  let showLabels = true;
   const infoBox = document.getElementById('infoBox');
+  const labelStatusEl = document.getElementById('label-status');
+
+  // Đồng bộ label ngay khi khởi tạo (visible + layer CSS2D)
+  solarSystem.toggleLabels(showLabels);
+  labelRenderer.domElement.style.display = showLabels ? 'block' : 'none';
+  if (labelStatusEl) labelStatusEl.textContent = showLabels ? 'Bật' : 'Tắt';
 
   function updateInfoBox(text) {
     if (infoBox) infoBox.innerHTML = text;
   }
 
+  // ── Speed slider (đồng bộ với phím +/-) ──
+  const speedSlider = document.getElementById('speed-slider');
+  const speedValue = document.getElementById('speed-value');
+
+  function setSpeed(v) {
+    speed = Math.min(4.0, Math.max(0.0, v));
+    if (speedSlider) speedSlider.value = String(speed);
+    if (speedValue) speedValue.textContent = `${speed.toFixed(2)}x`;
+  }
+
+  if (speedSlider) {
+    speedSlider.addEventListener('input', () => setSpeed(parseFloat(speedSlider.value)));
+  }
+  setSpeed(speed);
+
   // ── Keyboard controls ──
-  document.addEventListener('keydown', (e) => {
+  // Dùng window để tránh trường hợp focus UI làm mất key events
+  window.addEventListener('keydown', (e) => {
     // Focus hành tinh
     const digit = parseInt(e.key, 10);
     if (digit >= 1 && digit <= 8) {
@@ -71,6 +149,7 @@ function init() {
     if (e.code === 'Space') {
       e.preventDefault();
       paused = !paused;
+      if (!paused) pausedForAffine = false;
       updateInfoBox(`<b>Animation:</b> ${paused ? 'Tạm dừng' : 'Đang chạy'}`);
     }
 
@@ -81,26 +160,55 @@ function init() {
       updateInfoBox(`<b>Quỹ đạo:</b> ${showOrbits ? 'Bật' : 'Tắt'}`);
     }
 
-    // Toggle shadow
-    if (e.key === 's' || e.key === 'S') {
-      // Chỉ toggle khi không có vật thể đang chọn (tránh xung đột)
-      if (!interaction.getSelected()) {
-        renderer.shadowMap.enabled = !renderer.shadowMap.enabled;
-        scene.traverse((obj) => {
-          if (obj.material) obj.material.needsUpdate = true;
-        });
-        updateInfoBox(`<b>Shadow Map:</b> ${renderer.shadowMap.enabled ? 'Bật' : 'Tắt'}`);
+    // Clipping: [ thu hẹp, ] mở rộng, Shift đổi near thay vì far
+    if (e.key === '[') {
+      const tag = e.target?.tagName;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+        e.preventDefault();
+        refreshClipHUD(camControls.clipTighten(e.shiftKey));
       }
+    }
+    if (e.key === ']') {
+      const tag = e.target?.tagName;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+        e.preventDefault();
+        refreshClipHUD(camControls.clipLoosen(e.shiftKey));
+      }
+    }
+    if (e.key === '\\') {
+      e.preventDefault();
+      refreshClipHUD(camControls.clipReset());
+    }
+
+    // Toggle shadow (S) — đổi cả ambient + cast shadow
+    if (e.key === 's' || e.key === 'S') {
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      e.preventDefault();
+      applyShadowMode(!shadowsEnabled);
+      updateInfoBox(`<b>Shadow:</b> ${shadowsEnabled ? 'Bật' : 'Tắt'}`);
     }
 
     // Tốc độ
     if (e.key === '+' || e.key === '=') {
-      speed = Math.min(4.0, speed + 0.15);
+      setSpeed(speed + 0.15);
       updateInfoBox(`<b>Tốc độ:</b> ${speed.toFixed(2)}x`);
     }
     if (e.key === '-' || e.key === '_') {
-      speed = Math.max(0.1, speed - 0.15);
+      setSpeed(speed - 0.15);
       updateInfoBox(`<b>Tốc độ:</b> ${speed.toFixed(2)}x`);
+    }
+
+    // Toggle label tên hành tinh (L)
+    if (e.key === 'l' || e.key === 'L') {
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      showLabels = !showLabels;
+      solarSystem.toggleLabels(showLabels);
+      labelRenderer.domElement.style.display = showLabels ? 'block' : 'none';
+      if (labelStatusEl) labelStatusEl.textContent = showLabels ? 'Bật' : 'Tắt';
+      updateInfoBox(`<b>Label:</b> ${showLabels ? 'Bật' : 'Tắt'}`);
     }
   });
 
@@ -121,6 +229,7 @@ function init() {
 
     // Cập nhật hệ mặt trời (quỹ đạo, tự quay, sun glow)
     solarSystem.update(elapsed, speed);
+    interaction.updateSelectionBox();
 
     // Cập nhật sky shader time
     if (skySphere.material.uniforms) {
@@ -128,6 +237,9 @@ function init() {
     }
 
     renderer.render(scene, camera);
+    if (showLabels) {
+      labelRenderer.render(scene, camera);
+    }
   }
 
   requestAnimationFrame(animate);
@@ -137,6 +249,7 @@ function init() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    labelRenderer.setSize(window.innerWidth, window.innerHeight);
   });
 }
 

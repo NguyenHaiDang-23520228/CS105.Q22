@@ -49,7 +49,7 @@ A high-fidelity 3D interactive solar system built with WebGL and Three.js, focus
 ## Project Structure
 
 Theo quy định nộp bài, đồ án được tổ chức như sau:
-- **Source**: Chứa mã nguồn và các thư viện sử dụng trong dự án.
+- **Source**: (không dùng nữa) Trước đây dùng cho bản cũ; hiện mã nguồn chính nằm ở `src/` tại thư mục gốc để chạy với Vite.
 - **Release**: Chứa file thực thi `index.html` và file `readme.txt` hướng dẫn.
 - **Doc**: Chứa file báo cáo chi tiết kỹ thuật của đồ án định dạng `.doc`.
 
