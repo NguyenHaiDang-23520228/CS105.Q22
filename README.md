@@ -16,23 +16,25 @@
 
 ## Team Members
 
-- [Nguyễn Hải Đăng - 23520228] 
+- [Nguyễn Hải Đăng - 23520228]
 - [Nguyễn Bi Anh - 23520055]
-- [Trần Hoài Minh - 23520955] 
+- [Trần Hoài Minh - 23520955]
 
 ## Solar System & Space Travel Simulation
 
-A high-fidelity 3D interactive solar system built with WebGL and Three.js, focusing on realistic orbital mechanics and advanced lighting.
+Mô phỏng Hệ Mặt Trời 3D tương tác xây dựng bằng WebGL và Three.js, tập trung vào Scene Graph, custom GLSL shader, chiếu sáng và bóng đổ thời gian thực.
 
 ### ✨ Features
 
-- 🪐 **Realistic Modeling**: Detailed 3D spheres for planets and custom ring geometry for Saturn.
-- 궤 **Orbital Mechanics**: Automatic movement using affine transformations (Translation, Rotation, Scaling).
-- ☀️ **Advanced Lighting**: Point light source at the Sun's core with Blinn-Phong reflection models.
-- 🌑 **Shadow Mapping**: Real-time shadows generated khi các thiên thể che khuất nhau.
-- 🖼️ **Texture Mapping**: High-quality bitmap textures applied to all planetary surfaces.
-- 🚀 **Space Navigation**: Automatic travel via hotkeys (1-9) and manual free-roam camera (W,A,S,D).
-- 🎨 **Custom Shaders**: GLSL-powered effects for solar flares and atmospheric glows.
+- 🪐 **Scene Graph & Orbital Mechanics**: Hệ phân cấp Sun → Planets → Moon; hành tinh quay quanh Mặt Trời và tự quay bằng các phép biến đổi Affine.
+- ☀️ **Custom GLSL Shaders**: Mặt Trời (flame + Fresnel glow), nebula sky sphere, và hiệu ứng khí quyển (atmospheric glow) cho Trái Đất & Sao Kim.
+- 💡 **Advanced Lighting**: PointLight tại tâm Mặt Trời + AmbientLight + DirectionalLight, bật/tắt độc lập qua UI checkbox.
+- 🌑 **Shadow Mapping**: PCFSoftShadowMap với shadow bias khử shadow acne; bật/tắt nhanh bằng phím `S`.
+- 🖼️ **Texture Mapping (UV)**: Texture hành tinh 2K thật (sRGB) kèm fallback procedural canvas texture; hỗ trợ **upload texture runtime** cho vật thể đang chọn.
+- 🏷️ **CSS2D Labels**: Tên hành tinh hiển thị bám theo vật thể, bật/tắt bằng phím `L`.
+- 🎮 **Interactive Affine Transforms**: Click chọn hành tinh (Raycaster) → Tịnh tiến / Quay / Tỉ lệ bằng D-pad trên panel hoặc phím mũi tên.
+- 🎥 **Orbit Camera**: Camera quỹ đạo tự viết (tọa độ cầu, lerp mượt), focus theo dõi từng hành tinh bằng phím `1`–`8`, toàn cảnh phím `0`.
+- ✂️ **Clipping Planes**: Điều chỉnh Near/Far từng bước bằng phím `[` `]` để minh họa view frustum.
 
 ### Tech Stack
 
@@ -42,16 +44,53 @@ A high-fidelity 3D interactive solar system built with WebGL and Three.js, focus
 - GLSL (Custom Shader Language)
 
 **Tools & Assets:**
-- JavaScript (ES6+)
-- Vite / Live Server
-- High-resolution planetary textures (2K/4K)
+- JavaScript (ES6+ Modules)
+- Vite (dev server + build)
+- High-resolution planetary textures (2K)
+
+## Getting Started
+
+Yêu cầu: **Node.js ≥ 18** và kết nối Internet (texture/font tải từ URL).
+
+```bash
+# 1. Cài dependency
+npm install
+
+# 2. Chạy chế độ phát triển (tự mở trình duyệt)
+npm run dev
+
+# 3. Build bản production (ra thư mục dist/)
+npm run build
+
+# 4. Xem thử bản build
+npm run preview
+```
+
+## Controls
+
+| Nhóm | Phím / Chuột | Chức năng |
+|------|--------------|-----------|
+| Camera | Chuột trái / Cuộn / Chuột phải | Xoay / Zoom / Pan |
+| Camera | `1`–`8`, `0` | Focus hành tinh / Toàn cảnh |
+| Hiển thị | `Space`, `O`, `S`, `L` | Dừng-chạy / Quỹ đạo / Shadow / Label |
+| Tốc độ | `+` `-` hoặc slider | Tốc độ quỹ đạo (0–4x) |
+| Clipping | `[` `]` `\` | Thu hẹp / Mở rộng / Reset Near-Far |
+| Affine | Click hành tinh → mode → `↑↓←→` | Tịnh tiến / Quay / Tỉ lệ; `ESC` bỏ chọn |
 
 ## Project Structure
 
-Theo quy định nộp bài, đồ án được tổ chức như sau:
-- **Source**: (không dùng nữa) Trước đây dùng cho bản cũ; hiện mã nguồn chính nằm ở `src/` tại thư mục gốc để chạy với Vite.
-- **Release**: Chứa file thực thi `index.html` và file `readme.txt` hướng dẫn.
-- **Doc**: Chứa file báo cáo chi tiết kỹ thuật của đồ án định dạng `.doc`.
+```
+CS105.Q22/
+├── index.html              # HUD, control panel, entry point
+├── src/
+│   ├── main.js             # Khởi tạo app, render loop, keyboard
+│   ├── core/               # Scene, Camera (orbit + clipping), Renderer, Interaction
+│   ├── objects/            # SolarSystem (scene graph), Environment (sky, stars)
+│   ├── shaders/            # GLSL: sun, sky nebula, atmosphere
+│   └── assets/textures/    # Texture cục bộ (tùy chọn, xem README bên trong)
+├── Release/                # Bản build (dist) + readme.txt hướng dẫn chạy
+└── Doc/                    # Báo cáo đồ án (.docx)
+```
 
 ## License
 
